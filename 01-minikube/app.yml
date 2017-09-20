@@ -1,0 +1,39 @@
+# app deployment
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: app
+  name: app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: app
+  template:
+    metadata:
+      labels:
+        run: app # must match the selector in the service
+    spec:
+      containers:
+      - image: localhost:5000/app:0.0.1
+        name: app
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+---
+# app server
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: app
+  name: app
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    run: app # must match the label of the pod, otherwise it will not be exposed
+  type: NodePort

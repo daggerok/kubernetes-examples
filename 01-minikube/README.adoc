@@ -1,0 +1,168 @@
+= minikube
+
+.spin up minikube
+[source,bash]
+----
+minikube start
+----
+
+.target environment to minikube
+[source,bash]
+----
+eval (minikube docker-env)
+----
+
+.get info
+[source,bash]
+----
+kubectl get nodes
+minikube ip
+kubectl get all
+kubectl get service
+kubectl get endpoints
+kubectl get deployments
+kubectl get pods --output=wide
+kubectl get replicationcontrollers
+----
+
+.dashboard
+[source,bash]
+----
+minikube dashboard
+----
+
+.bootstrap local registry
+[source,bash]
+----
+docker run -d -p 5000:5000 --restart=always --name registry registry:2
+----
+
+.app
+[source,bash]
+----
+git clone https://github.com/daggerok/minikube-spring-boot-docker.git build
+bash build/gradlew -b build/build.gradle build
+docker build -t app ./build
+docker tag app localhost:5000/app:0.0.1
+docker push localhost:5000/app:0.0.1
+cd ..
+rm -rf build
+----
+
+.app.yml
+[source,yaml]
+----
+---
+# app deployment
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: app
+  name: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: app
+  template:
+    metadata:
+      labels:
+        run: app-exposed # must match the selector in the service
+    spec:
+      containers:
+      - image: localhost:5000/app:0.0.1
+        name: app
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+---
+# app server
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: app
+  name: app
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    run: app-exposed # must match the label of the pod, otherwise it will not be exposed
+  type: NodePort
+----
+
+.create app deployment
+[source,bash]
+----
+kubectl create -f app.yml
+----
+
+.get exposed service url
+[source,bash]
+----
+http (minikube service app --url)
+http://192.168.99.100:30423
+
+minikube service app
+----
+
+change replicas to:
+.app.yml
+[source,yaml]
+----
+replicas: 5
+----
+
+and initial update using command
+
+.replace deployment
+[source,bash]
+----
+kubectl replace -f app.yml --force
+minikube service app
+kubectl describe replicasets
+----
+
+.helm and ssh to minikube https://github.com/marun/nkube
+[source,bash]
+----
+helm init
+
+minikube ssh
+sudo modprobe ip6_tables
+exit
+logout
+
+https://github.com/marun/nkube.git
+cd nkube
+bash start.sh # and wait ...
+
+Done
+Cluster init took 255s
+
+To access the cluster, use --context=crazy-ladybug with kubectl
+
+kubectl --context=crazy-ladybug
+helm delete crazy-ladybug
+----
+
+.cleanup
+[source,bash]
+----
+kubectl delete service app
+service "app" deleted
+
+kubectl delete deploy app
+deployment "app" deleted
+
+minikube stop
+Stopping local Kubernetes cluster...
+Machine stopped.
+
+minikube delete
+Deleting local Kubernetes cluster...
+Machine deleted.
+----

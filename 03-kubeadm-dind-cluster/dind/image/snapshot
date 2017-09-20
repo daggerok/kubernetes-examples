@@ -1,0 +1,122 @@
+#!/bin/bash
+# Copyright 2017 Mirantis
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
+function snapshot::prepare {
+  if [[ -f /etc/kubernetes/manifests/kube-controller-manager.json || -f /etc/kubernetes/manifests/kube-controller-manager.yaml ]]; then
+    # remove kube-dns and kube-dashboard pods to avoid 'blinking'
+    # FIXME: when using k8s 1.6 kube-dns pods stay in 'Terminating' state
+    # Possibly related: https://github.com/kubernetes/kubernetes/issues/42685
+    kubectl scale deployment --replicas=0 -n kube-system kube-dns
+    kubectl scale deployment --replicas=0 -n kube-system kubernetes-dashboard
+    local n=60
+    while kubectl get pods -n kube-system -o name | egrep -q '^pods*/(kube-dns-|kubernetes-dashboard-)'; do
+      if ((--n == 0)); then
+        echo "WARNING: controller manager glitch: dns & dashboard won't stop; pods may 'blink' for some time after restore" >&2
+        systemctl stop kubelet docker
+        return
+      fi
+      sleep 0.3
+    done
+
+    mkdir /manifests.bak
+    # stop controller manager so it doesn't launch new proxy daemon pods
+    mv /etc/kubernetes/manifests/kube-controller-manager.* /manifests.bak/
+    n=100
+    while kubectl get pod kube-controller-manager-kube-master -n kube-system -o name 2>/dev/null | grep -q pods*/; do
+      if ((--n == 0)); then
+        echo "WARNING: kubelet glitch: kube-controller-manager won't stop; pods may 'blink' for some time after restore" >&2
+        systemctl stop kubelet docker
+        return
+      fi
+      sleep 0.3
+    done
+
+    # delete proxy pods so they don't "blink" after cluster restart
+    kubectl delete pod --now -l k8s-app=kube-proxy -n kube-system 2>/dev/null
+    n=40
+    while kubectl get pod -n kube-system -o name -l k8s-app=kube-proxy | grep -q '^pods*/'; do
+      if ((--n == 0)); then
+        echo "WARNING: cluster glitch: proxy pods aren't removed; pods may 'blink' for some time after restore" >&2
+        systemctl stop kubelet docker
+        return
+      fi
+      sleep 0.3
+    done
+    kubectl get pods -n kube-system
+    systemctl stop kubelet docker
+    # now it's safe to put back the manifest
+    mv /manifests.bak/* /etc/kubernetes/manifests/
+    rmdir /manifests.bak
+  else
+    systemctl stop kubelet docker
+  fi
+}
+
+function snapshot::save {
+  # the scripts expects output the output of 'docker diff' as input
+  grep -v '^D ' |
+    sed 's@^. /@@' |
+    egrep -v '^(tmp|var/lib/kubelet|var/log|etc/mtab|run/)' |
+    while read path; do
+      # FIXME: need to just add all the empty dirs to the list
+      # Non-empty dirs will be added automatically by tar
+      if [[ ! -d ${path} || ${path} =~ ^.*/etcd/.*/snap$ ]]; then
+        echo "${path}"
+      fi
+    done |
+    tar -C / -cf /dind/snapshot.tar -T -
+  if [[ -f /var/run/kubernetes/kubelet-client.key ]]; then
+    tar -C / -cf /dind/var-run-kubernetes.tar var/run/kubernetes
+  fi
+
+  systemctl start kubelet docker
+}
+
+function snapshot::restore {
+  tar -C / -xf /dind/snapshot.tar
+  if [[ -f /dind/var-run-kubernetes.tar ]]; then
+    tar -C / -xf /dind/var-run-kubernetes.tar
+  fi
+  if [[ ${1:-} = "-u" ]]; then
+    wrapkubeadm ensure-binaries
+  fi
+  start_services docker kubelet
+}
+
+case "${1:-}" in
+  prepare)
+    snapshot::prepare
+    ;;
+  save)
+    snapshot::save
+    ;;
+  restore)
+    snapshot::restore
+    ;;
+  update_and_restore)
+    snapshot::restore -u
+    ;;
+  *)
+    echo "usage:" >&2
+    echo "  $0 save" >&2
+    echo "  $0 restore" >&2
+    exit 1
+    ;;
+esac

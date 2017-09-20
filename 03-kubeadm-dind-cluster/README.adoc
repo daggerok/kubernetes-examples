@@ -1,0 +1,82 @@
+= lubeadm dind cluster
+
+.bootstrap cluster (master, node1, node2)
+[source,bash]
+----
+git clone git@github.com:Mirantis/kubeadm-dind-cluster.git dind
+bash dind/dind-cluster.sh up
+----
+
+.ui available
+[source,bash]
+----
+open http://localhost:8080/ui
+----
+
+.prepare app
+[source,bash]
+----
+cd ../
+git clone https://github.com/daggerok/minikube-spring-boot-docker.git build
+bash build/gradlew -b build/build.gradle build
+docker build -t app ./build
+docker tag app daggerok/kubernetes-examples-03-kubeadm-dind-cluster:0.0.1
+docker push daggerok/kubernetes-examples-03-kubeadm-dind-cluster:0.0.1
+cd ..
+----
+
+.ui available
+[source,bash]
+----
+kubectl replace -f kubernetes-examples-03-kubeadm-dind-cluster.yml --force # or
+open http://localhost:8080/ui
+open http://localhost:8080/api/v1/namespaces/default/services/kubernetes-examples-03-kubeadm-dind-cluster
+----
+
+.forward service port 8080 to local 8001 for test
+[source,bash]
+----
+kubectl port-forward -p kubernetes-examples-03-kubeadm-dind-cluster-1859009132-bjn7p 8001:8080
+W0920 13:01:16.403698   49820 cmd.go:392] -p POD is DEPRECATED and will be removed in a future version. Use port-forward POD instead.
+Forwarding from 127.0.0.1:8001 -> 8080
+Forwarding from [::1]:8001 -> 8080
+Handling connection for 8001
+Handling connection for 8001
+
+kubectl port-forward kubernetes-examples-03-kubeadm-dind-cluster-1859009132-bjn7p 8001:8080
+Forwarding from 127.0.0.1:8001 -> 8080
+Forwarding from [::1]:8001 -> 8080
+
+http :8001
+----
+
+link:https://kubernetes-v1-4.github.io/docs/user-guide/kubectl/kubectl_port-forward/[read more]
+
+.execute a command on pode
+[source,bash]
+----
+kubectl exec kubernetes-examples-03-kubeadm-dind-cluster-1859009132-bjn7p ifconfig
+----
+
+.pod logs
+[source,bash]
+----
+kubectl exec kubernetes-examples-03-kubeadm-dind-cluster-1859009132-bjn7p ifconfig
+----
+
+.pod scale
+[source,bash]
+----
+kubectl scale --replicas=3 deployment/kubernetes-examples-03-kubeadm-dind-cluster                                         13:35:07
+deployment "kubernetes-examples-03-kubeadm-dind-cluster" scaled
+----
+
+link:https://kubernetes-v1-4.github.io/docs/user-guide/kubectl/kubectl_scale/[read about scale]
+
+.cleanup
+[source,bash]
+----
+kubectl delete deploy app
+bash dind/dind-cluster.sh down
+bash dind/dind-cluster.sh clean
+----

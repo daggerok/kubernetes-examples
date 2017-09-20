@@ -1,0 +1,40 @@
+# kubernetes-examples-03-kubeadm-dind-cluster deployment
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: kubernetes-examples-03-kubeadm-dind-cluster
+  name: kubernetes-examples-03-kubeadm-dind-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: kubernetes-examples-03-kubeadm-dind-cluster
+  template:
+    metadata:
+      labels:
+        run: kubernetes-examples-03-kubeadm-dind-cluster # must match the selector in the service
+    spec:
+      containers:
+      - image: daggerok/kubernetes-examples-03-kubeadm-dind-cluster:0.0.1
+        name: kubernetes-examples-03-kubeadm-dind-cluster
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+---
+# kubernetes-examples-03-kubeadm-dind-cluster server
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: kubernetes-examples-03-kubeadm-dind-cluster
+  name: kubernetes-examples-03-kubeadm-dind-cluster
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    run: kubernetes-examples-03-kubeadm-dind-cluster # must match the label of the pod, otherwise it will not be exposed
+  # type: NodePort
+  type: LoadBalancer

@@ -1,0 +1,346 @@
+#!/bin/bash
+# Copyright 2017 Mirantis
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
+HYPERKUBE_SOURCE="${HYPERKUBE_SOURCE:-keep://}"
+KUBEADM_SOURCE="${KUBEADM_SOURCE:-keep://}"
+
+hypokube_base_image="mirantis/hypokube:base"
+hypokube_final_image="mirantis/hypokube:final"
+build_src_dir="/go/src/k8s.io/kubernetes"
+binary_dir="/k8s"
+# FIXME: don't hardcode
+platform="linux/amd64"
+
+# These files can be either .json or .yaml depending on kubeadm version
+# (TODO: use newer kubeadm)
+apiserver_static_pod="/etc/kubernetes/manifests/kube-apiserver"
+scheduler_static_pod="/etc/kubernetes/manifests/kube-scheduler"
+controller_manager_static_pod="/etc/kubernetes/manifests/kube-controller-manager"
+
+# jq filters follow.
+# This filter updates static pod definitions to mount /hyperkube from hosts:
+mount_binaries='.spec.volumes|=.+[{"name":"hyperkube",hostPath:{"path":"/k8s/hyperkube"}}]|.spec.containers[0].volumeMounts|=.+[{"name":"hyperkube", "mountPath":"/hyperkube"}]'
+proxy_mount_binaries='.items[0].spec.template.spec.volumes|=.+[{"name":"hyperkube",hostPath:{"path":"/k8s/hyperkube"}}]|.items[0].spec.template.spec.containers[0].volumeMounts|=.+[{"name":"hyperkube", "mountPath":"/hyperkube"}]'
+# Make apiserver listen insecurely on 0.0.0.0, it's ~ok because it's done in a container
+# TODO: think about more secure possibilities
+apiserver_insecure_bind_address='.spec.containers[0].command|=map(select(startswith("--insecure-bind-address=")|not))+["--insecure-bind-address=0.0.0.0"]'
+# Make apiserver accept insecure connections on port 8080
+# TODO: don't use insecure port
+apiserver_insecure_bind_port='.spec.containers[0].command|=map(select(startswith("--insecure-port=")|not))+["--insecure-port=8080"]'
+# Enable streaming proxy redirects, needed for CRI in k8s 1.5
+apiserver_streaming_proxy_redirects='.spec.containers[0].command|=.+["--feature-gates=StreamingProxyRedirects=true"]'
+# Update kube-proxy CIDR, enable --masquerade-all and disable conntrack (see dind::frob-proxy below)
+function dind::proxy-cidr-and-no-conntrack {
+  cluster_cidr="$(ip addr show docker0 | grep -w inet | awk '{ print $2; }')"
+  echo ".items[0].spec.template.spec.containers[0].command |= .+ [\"--cluster-cidr=${cluster_cidr}\", \"--masquerade-all\", \"--conntrack-max=0\", \"--conntrack-max-per-core=0\"]"
+}
+
+is_master=
+if [[ "$(hostname)" = kube-master ]]; then
+  is_master=y
+fi
+
+# unpack saved /boot & /lib/modules if there are any
+if [[ -f /dind-sys/sys.tar ]]; then
+  tar -C / -xf /dind-sys/sys.tar
+fi
+
+function dind::retry {
+  # based on retry function in hack/jenkins/ scripts in k8s source
+  for i in {1..10}; do
+    "$@" && return 0 || sleep ${i}
+  done
+  "$@"
+}
+
+function dind::get-binary-from-build-data-container {
+  local filename="$1"
+  local src_path="${build_src_dir}/_output/dockerized/bin/${platform}/${filename}"
+  local dest_path="${binary_dir}/${filename}"
+  if [[ -f "${src_path}" ]]; then
+    cp "${src_path}" "${binary_dir}/${filename}"
+  else
+    echo "Cannot locate the file in build data container: ${src_path}" >&2
+    return 1
+  fi
+}
+
+function dind::verify-binary {
+  local filename="$1"
+  local dest_path="${binary_dir}/${filename}"
+  if [[ ! -f "${dest_path}" ]]; then
+    echo "Binary not found in the container: ${dest_path}" >&2
+    exit 1
+  fi
+}
+
+function dind::get-binary-from-url {
+  local filename="$1"
+  local url="$2"
+  local dest_path="${binary_dir}/${filename}"
+  if [[ -f "${dest_path}" ]]; then
+    return 0
+  fi
+  wget -O "${dest_path}" "${url}"
+  chmod +x "${dest_path}"
+}
+
+function dind::get-binary {
+  local filename="$1"
+  local src="$2"
+  if [[ ${src} = "build://" ]]; then
+    dind::get-binary-from-build-data-container "${filename}"
+  elif [[ ${src} = "keep://" ]]; then
+    dind::verify-binary "${filename}"
+  else
+    dind::get-binary-from-url "${filename}" "${src}"
+  fi
+}
+
+function dind::get-binaries {
+  dind::get-binary hyperkube "${HYPERKUBE_SOURCE}"
+  dind::get-binary kubeadm "${KUBEADM_SOURCE}"
+}
+
+function dind::image-exists {
+  local name="$1"
+  if ! docker inspect "${name}" >&/dev/null; then
+    return 1
+  fi
+}
+
+function dind::ensure-binaries-and-hypokube {
+  # avoid race - if binaries need to be fetched,
+  # do it in just one container
+  if [[ ${is_master} ]]; then
+     dind::get-binaries
+  fi
+  local hyperkube_bin="${binary_dir}/hyperkube"
+  # in prebuilt (complete) DIND images, final hypokube image is
+  # already present
+  if ! dind::image-exists "${hypokube_final_image}" || [[ ${HYPERKUBE_SOURCE} = build:// ]] ; then
+    # We use current hyperkube binary to build final hypokube image.
+    # It will be used for initial cluster deployment.
+    # After we "frob" the cluster, the hyperkube image is taken from /k8s directory.
+    cp "${hyperkube_bin}" /hypokube/
+    docker build -t "${hypokube_final_image}" -f /hypokube/hypokube.dkr /hypokube
+  fi
+}
+
+function dind::replace {
+  local path="$1"
+  # Replace the file after reading all of the standard input
+  # via: https://github.com/stedolan/jq/issues/105#issuecomment-272712293
+  # Could use 'sponge' from moreutils, but don't want to make the image larger
+  awk 'BEGIN{RS="";getline<"-";print>ARGV[1]}' "${path}"
+}
+
+function dind::yq {
+  local filter="$1"
+  local path="$2"
+  # We need to use a temp file here because if you feed an object to
+  # 'kubectl convert' via stdin, you'll get a List object because
+  # multiple input objects are implied
+  tmp="$(mktemp tmp-XXXXXXXXXX.json)"
+  # We set KUBECONFIG here because as of current k8s master kubectl convert --local
+  # requires k8s access. This should be fixed by # https://github.com/kubernetes/kubernetes/pull/45920
+  KUBECONFIG=/etc/kubernetes/admin.conf kubectl convert -f "${path}" --local -o json 2>/dev/null |
+    jq "${filter}" > "${tmp}"
+  KUBECONFIG=/etc/kubernetes/admin.conf kubectl convert -f "${tmp}" --local -o yaml 2>/dev/null >"${path}"
+  rm -f "${tmp}"
+}
+
+function dind::jq {
+  local filter="$1"
+  local path="$2"
+  jq "${filter}" "${path}" | dind::replace "${path}"
+}
+
+function dind::join-filters {
+  local IFS="|"
+  echo "$*"
+}
+
+function dind::frob-file {
+  local path_base="$1"
+  shift
+  local filter="$(dind::join-filters "$@")"
+  local status=0
+  if [[ -f ${path_base}.json ]]; then
+    dind::jq "${filter}" "${path_base}.json" || status=$?
+  elif [[ -f ${path_base}.yaml ]]; then
+    dind::yq "${filter}" "${path_base}.yaml" || status=$?
+  else
+    echo "${path_base}.json or ${path_base}.yaml not found" >&2
+    return 1
+  fi
+  if [[ ${status} -ne 0 ]]; then
+    echo "Failed to frob ${path_base}.json or ${path_base}.yaml" >&2
+    return 1
+  fi
+}
+
+function dind::frob-proxy {
+  # Trying to change conntrack settings fails even in priveleged containers,
+  # so we need to avoid it. Here's sample error message from kube-proxy:
+  # I1010 21:53:00.525940       1 conntrack.go:57] Setting conntrack hashsize to 49152
+  # Error: write /sys/module/nf_conntrack/parameters/hashsize: operation not supported
+  # write /sys/module/nf_conntrack/parameters/hashsize: operation not supported
+  #
+  # Recipe by @errordeveloper:
+  # https://github.com/kubernetes/kubernetes/pull/34522#issuecomment-253248985
+
+  # sometimes this fails with 'the server doesn't have a resource type "daemonsets"'
+  # if done too early
+  dind::retry kubectl -n kube-system get ds -l k8s-app=kube-proxy -o name >/dev/null
+
+  kubectl -n kube-system get ds -l k8s-app=kube-proxy -o json |
+    jq "$(dind::join-filters "${proxy_mount_binaries}" "$(dind::proxy-cidr-and-no-conntrack)")" |
+    kubectl apply --force -f -
+  kubectl -n kube-system delete pods --now -l "k8s-app=kube-proxy"
+}
+
+function dind::frob-apiserver {
+  local -a filters=("${mount_binaries}" "${apiserver_insecure_bind_address}" "${apiserver_insecure_bind_port}")
+  # StreamingProxyRedirects is needed for CRI (it's enabled in 1.6+ by default)
+  if kubectl version --short 2>/dev/null|grep -q 'Server.*: v1\.5\.'; then
+    filters+=("${apiserver_streaming_proxy_redirects}")
+  fi
+  dind::frob-file "${apiserver_static_pod}" "${filters[@]}"
+}
+
+function dind::frob-scheduler {
+  dind::frob-file "${scheduler_static_pod}" "${mount_binaries}"
+}
+
+function dind::frob-controller-manager {
+  dind::frob-file "${controller_manager_static_pod}" "${mount_binaries}"
+}
+
+function dind::num-apiserver-restarts {
+  kubectl get pod kube-apiserver-kube-master -n kube-system -o 'jsonpath={.status.containerStatuses[0].restartCount}'
+}
+
+function dind::wait-for-apiserver {
+    local docker_ip="$(ip addr show docker0 | grep -w inet | awk '{ print $2; }' | sed 's@/.*@@')"
+    local url="http://${docker_ip}:8080/api"
+    local n=60
+    while true; do
+      if curl -s "${url}" >&/dev/null; then
+        break
+      fi
+      if ((--n == 0)); then
+        echo "Error: timed out waiting for apiserver to become available" >&2
+      fi
+      sleep 0.5
+    done
+}
+
+function dind::frob-cluster {
+  dind::frob-apiserver
+  dind::frob-scheduler
+  dind::frob-controller-manager
+  dind::wait-for-apiserver
+  dind::frob-proxy
+}
+
+kubelet_extra_args=()
+
+function dind::maybe-use-bootstrap-kubeconfig {
+  # New behavior to be used after https://github.com/kubernetes/kubernetes/pull/49681
+  # Don't use --bootstrap-kubeconfig for k8s 1.7 though
+  if ! /k8s/hyperkube kubelet --help 2>&1 | grep -q -- --bootstrap-kubeconfig || /k8s/hyperkube kubelet --version | grep -q 'v1\.7\.'; then
+    return
+  fi
+  kubelet_extra_args+=(--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf)
+}
+
+function dind::fix-cgroups {
+  # Workaround for https://github.com/kubernetes/kubernetes/issues/43704
+  if ! egrep -q '^tmpfs\s+/sys/fs/cgroup\s+\S+\s+ro(,|\s|$)' /proc/mounts; then
+    return
+  fi
+  if ! /k8s/hyperkube kubelet --help 2>&1 | grep -q -- --enforce-node-allocatable; then
+    return
+  fi
+  kubelet_extra_args+=(--cgroups-per-qos=false --enforce-node-allocatable=)
+}
+
+function dind::maybe-enable-swap {
+  if ! /k8s/hyperkube kubelet --help 2>&1 | grep -q -- --fail-swap-on; then
+    return
+  fi
+  kubelet_extra_args+=("--fail-swap-on=false")
+}
+
+function dind::set-kubelet-extra-args {
+  dind::maybe-use-bootstrap-kubeconfig
+  dind::fix-cgroups
+  dind::maybe-enable-swap
+  if [[ ${#kubelet_extra_args[@]} -gt 0 ]]; then
+    mkdir -p /etc/systemd/system/kubelet.service.d
+    cat >/etc/systemd/system/kubelet.service.d/10-extra-args.conf <<EOF
+[Service]
+Environment="KUBELET_EXTRA_ARGS=${kubelet_extra_args[@]} --v=4"
+EOF
+    systemctl daemon-reload
+  fi
+}
+
+function dind::prepare-for-kubeadm {
+  start_services docker
+  systemctl enable docker
+
+  if ! docker images gcr.io/google_containers/pause-amd64|grep -q 'gcr\.io/'; then
+    time lz4 -dc /save.tar.lz4 | docker load
+  fi
+  dind::ensure-binaries-and-hypokube
+
+  dind::set-kubelet-extra-args
+
+  # enable kubelet right before starting kubeadm to avoid
+  # longer delays between container restarts
+  start_services kubelet
+  systemctl enable kubelet
+}
+
+function dind::do-kubeadm {
+  if ! time KUBE_HYPERKUBE_IMAGE="${hypokube_final_image}" kubeadm "$@"; then
+    kubeadm reset || true
+  fi
+}
+
+if [[ ${1:-} = ensure-binaries ]]; then
+  dind::ensure-binaries-and-hypokube
+else
+  # Weave depends on /etc/machine-id being unique
+  rm -f /etc/machine-id
+  systemd-machine-id-setup
+  dind::prepare-for-kubeadm
+
+  dind::retry dind::do-kubeadm "$@"
+
+  if [[ ${is_master} ]]; then
+    dind::frob-cluster
+  fi
+fi
+
+# TODO: only mount /k8s/hyperkube into containers in case if build:// source is used
+# TODO: after 'frobbing' the components, wait for them to restart (restart count must increase)
