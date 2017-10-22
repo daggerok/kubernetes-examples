@@ -1,0 +1,38 @@
+apiVersion: "v1"
+kind: Pod
+metadata:
+  name: commander
+  labels:
+    name: commander
+    app: containerize-step-by-step
+spec:
+  containers:
+    - name: commander
+#      image: localhost:5000/redis-commander-healthcheck:latest
+#      image: localhost:5000/redis-commander-healthcheck:1
+      image: localhost:5000/redis-commander-healthcheck:2
+      ports:
+        - containerPort: 8081
+          name: commander
+          protocol: TCP
+
+---
+
+apiVersion: "v1"
+kind: Service
+metadata:
+  name: commander
+  labels:
+    name: commander
+    app: containerize-step-by-step
+spec:
+  ports:
+    - port: 8081
+      name: commander-http
+      targetPort: 8081
+  # expose port `minikube service web-app --url`
+  type: NodePort
+  # selector pointing to pod metadata.labels
+  selector:
+    name: commander
+    app: containerize-step-by-step

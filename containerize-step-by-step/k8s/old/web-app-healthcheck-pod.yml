@@ -1,0 +1,15 @@
+apiVersion: "v1"
+kind: Pod
+metadata:
+  name: web-app-healthcheck
+  labels:
+    name: web-app-healthcheck
+    app: containerize-step-by-step
+spec:
+  containers:
+    - name: web-app-healthcheck
+      image: localhost:5000/web-app-healthcheck:latest
+      ports:
+        - containerPort: 8080
+          name: web-app-healthcheck
+          protocol: TCP

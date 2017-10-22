@@ -27,6 +27,7 @@ dependencies {
   compileOnly("org.projectlombok:lombok")
   compile("org.springframework.boot:spring-boot-starter-data-redis")
   compile("org.springframework.boot:spring-boot-starter-mustache")
+  compile("org.springframework.boot:spring-boot-starter-actuator")
 }
 
 springBoot {
@@ -38,4 +39,3 @@ springBoot {
   it.shouldRunAfter assemble, ":docker-compose:composeUp"
   it.finalizedBy ":docker-compose:composeDown"
 }
-

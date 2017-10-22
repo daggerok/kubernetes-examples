@@ -29,3 +29,53 @@ http://localhost:8081/
 
 bash ./docker-swarm/swarm-cleanup.bash
 ----
+
+.using kubernetes (minikube)
+[script,bash]
+----
+bash gradlew clean assemble
+
+# k8s cluster
+minikube start --cpus 2 --memory 4096
+#kubectl get cs
+
+# registry
+eval $(minikube docker-env)
+kubectl create -f ./k8s/kube-registry.yaml
+
+#host port 5000 to minikube registry pod localhost:5000 => $KUBE_REGISTRY_POD:5000`
+#test 1: `curl -v localhost:5000`
+#test 2: `minikube ssh` then `curl -v localhost:5000`
+#test 3: `ssh -i ~/.minikube/machines/minikube/id_rsa docker@$(minikube ip) -L \*:30000:0.0.0.0:30000`
+export REGISTRY_POD=$(kubectl get pod -n kube-system | grep kube-registry-v0 | awk '{print $1;}')
+kubectl port-forward --namespace kube-system $REGISTRY_POD 5000:5000
+
+# redis
+kubectl create -f ./k8s/redis-healthcheck.yml
+
+# web-app
+docker build --build-arg REDIS_HOST=redis -f ./docker/web-app-healthcheck/Dockerfile -t localhost:5000/web-app-healthcheck .
+docker push localhost:5000/web-app-healthcheck
+#http :5000/v2/web-app-healthcheck/tags/list
+
+kubectl create -f ./k8s/web-app-healthcheck.yml
+#http $(minikube service web-app --format='{{.IP}}'):$(minikube service web-app --format='{{.Port}}')
+#or
+kubectl port-forward web-app 8080
+http :8080
+
+# redis-commander
+docker build --build-arg REDIS_HOST=redis -f ./docker/redis-commander-healthcheck/Dockerfile -t localhost:5000/redis-commander-healthcheck .
+docker push localhost:5000/redis-commander-healthcheck
+#http :5000/v2/redis-commander-healthcheck/tags/list
+
+kubectl create -f ./k8s/redis-commander-healthcheck.yml
+#open $(minikube service commander --url)
+#or
+minikube service commander
+----
+
+links:
+
+. link:https://blog.hasura.io/sharing-a-local-registry-for-minikube-37c7240d0615[minikube and local registry]
+. link:https://www.youtube.com/watch?v=zeS6OyDoy78[Kubernetes Webinar Series - Kubernetes Architecture 101]

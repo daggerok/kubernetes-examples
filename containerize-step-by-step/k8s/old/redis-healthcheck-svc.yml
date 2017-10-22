@@ -1,0 +1,16 @@
+apiVersion: "v1"
+kind: Service
+metadata:
+  name: redis-healthcheck
+  labels:
+    name: redis-healthcheck
+    app: containerize-step-by-step
+spec:
+  ports:
+    - port: 6379
+      name: redis-healthcheck
+      targetPort: 6379
+  # selector pointing to redis-healthcheck-pod.yml metadata.labels
+  selector:
+    name: redis-healthcheck
+    app: containerize-step-by-step
