@@ -1,0 +1,3 @@
+= kubernetes-examples
+
+. link:https://www.oreilly.com/ideas/how-to-manage-docker-containers-in-kubernetes-with-java?imm_mid=0f75d0&cmp=em-prog-na-na-newsltr_20171021[How to manage Docker containers in Kubernetes with Java]

@@ -1,4 +1,4 @@
-.DS_Store
+oreilly-docker-java-shopping/
 .git-backup/
 .gradle/
 build/
@@ -7,3 +7,4 @@ out/
 *.ipr
 *.iws
 *.iml
+.DS_Store
