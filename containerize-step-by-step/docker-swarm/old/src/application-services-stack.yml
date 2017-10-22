@@ -1,0 +1,54 @@
+version: "3.3"
+
+services:
+
+  redis-commander-healthcheck:
+    build:
+      context: ../../..
+      dockerfile: ./docker/redis-commander-healthcheck/Dockerfile-jsut-add-healthcheck
+    #depends_on: [redis]
+    image: 127.0.0.1:5000/redis-commander-healthcheck
+    ports: ["8081:8081"]
+    command: " --redis-host redis "
+    networks:
+      - backing-services
+      - public
+    restart: unless-stopped
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: vip
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        window: 15s
+
+  web-app-healthcheck:
+    build:
+      context: ../../..
+      dockerfile: ./docker/web-app-healthcheck/Dockerfile
+    #depends_on: [redis]
+    environment:
+      SPRING_REDIS_HOST: redis
+    image: 127.0.0.1:5000/web-app-healthcheck
+    ports: ["8080:8080"]
+    volumes: ["web-app-healthcheck-data:/home/app"]
+    networks:
+      - backing-services
+      - public
+    restart: unless-stopped
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: vip
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        window: 15s
+
+volumes:
+  web-app-healthcheck-data:
+
+networks:
+  backing-services:
+  public:

@@ -1,0 +1,31 @@
+= containerize-step-by-step
+
+.step 1) gradle using docker / docker-compose on build
+[script,bash]
+----
+bash bradlew clean build
+----
+
+.step 2) docker-compse v2.1 manual run
+[script,bash]
+----
+bash gradlew clean assemble
+docker-compose -f ./docker-compose/docker-compose-all.yml up --build
+
+http://localhost:8080/
+http://localhost:8081/
+
+docker-compose -f ./docker-compose/docker-compose-all.yml down -v
+----
+
+.step 3) docker swarm cluster - stack deploy using docker-compse v3.3
+[script,bash]
+----
+bash gradlew clean assemble
+bash ./docker-swarm/swarm-stack-deploy.bash
+
+http://localhost:8080/
+http://localhost:8081/
+
+bash ./docker-swarm/swarm-cleanup.bash
+----

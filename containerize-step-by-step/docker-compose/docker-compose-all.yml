@@ -1,0 +1,43 @@
+version: "2.1"
+
+services:
+
+  redis:
+    image: healthcheck/redis:alpine
+    ports: ["6379:6379"]
+    networks: [backing-services]
+    volumes: ["redis-data:/data"]
+
+  redis-commander-healthcheck:
+    build:
+      context: ..
+      dockerfile: ./docker/redis-commander-healthcheck/Dockerfile-jsut-add-healthcheck
+    depends_on:
+      redis:
+        condition: service_healthy
+    image: 127.0.0.1:5000/redis-commander-healthcheck
+    ports: ["8081:8081"]
+    networks: [backing-services]
+    command: " --redis-host redis "
+
+  web-app:
+    build:
+      context: ..
+      dockerfile: ./docker/web-app-healthcheck/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_REDIS_HOST: redis
+    image: 127.0.0.1:5000/web-app-healthcheck
+    ports: ["8080:8080"]
+    volumes: ["web-app-data:/home/app"]
+    networks: [backing-services]
+
+volumes:
+  redis-data: {}
+  web-app-data: {}
+
+networks:
+  backing-services:
+    driver: bridge

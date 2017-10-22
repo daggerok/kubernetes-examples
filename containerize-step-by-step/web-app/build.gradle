@@ -1,0 +1,41 @@
+buildscript {
+  ext {
+    springBootVersion = "1.5.8.RELEASE"
+  }
+}
+
+plugins {
+  id "idea"
+  id "java"
+  id "eclipse"
+  id "org.springframework.boot" version "1.5.8.RELEASE"
+}
+
+allprojects {
+  group = "daggerok"
+  version = "0.0.1"
+  apply plugin: "base"
+}
+
+sourceCompatibility = targetCompatibility = 1.8
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compileOnly("org.projectlombok:lombok")
+  compile("org.springframework.boot:spring-boot-starter-data-redis")
+  compile("org.springframework.boot:spring-boot-starter-mustache")
+}
+
+springBoot {
+  executable = true
+}
+
+[test, build, bootRun].each {
+  it.dependsOn assemble, ":docker-compose:composeUp"
+  it.shouldRunAfter assemble, ":docker-compose:composeUp"
+  it.finalizedBy ":docker-compose:composeDown"
+}
+

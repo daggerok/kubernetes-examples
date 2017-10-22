@@ -1,0 +1,21 @@
+plugins {
+  id "com.avast.gradle.docker-compose" version "0.4.3"
+}
+
+def thatPath = rootProject.projectDir.absolutePath
+
+// fucking windows paths... replace all: '\\' -> '/'
+def root = thatPath.replaceAll("\\\\", '/')
+
+dockerCompose {
+  useComposeFiles = ["$root/$project.name/docker-compose.yml"]
+  captureContainersOutput = true
+  stopContainers = true
+  removeContainers = true
+  removeImages = "Local"
+  removeVolumes = true
+  removeOrphans = true
+  projectName = "$project.parent.name"
+}
+
+composeUp.shouldRunAfter ":web-app:assemble"

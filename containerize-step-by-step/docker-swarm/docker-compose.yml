@@ -1,0 +1,67 @@
+version: "3.3"
+
+services:
+
+  redis-healthcheck:
+    image: healthcheck/redis:alpine
+    ports: ["6379:6379"]
+    networks: [backing-services]
+    volumes: ["redis-healthcheck-data:/data"]
+    restart: unless-stopped
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        window: 15s
+      placement:
+        constraints: [node.role == manager]
+
+  redis-commander-healthcheck:
+    image: 127.0.0.1:5000/redis-commander-healthcheck
+    depends_on: [redis-healthcheck]
+    build:
+      context: ..
+      dockerfile: ./docker/redis-commander-healthcheck/Dockerfile
+      args:
+        REDIS_HOST: redis-healthcheck
+    ports: ["8081:8081"]
+    networks:
+      - backing-services
+      - public
+    restart: unless-stopped
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: vip
+
+  web-app-healthcheck:
+    image: 127.0.0.1:5000/web-app-healthcheck
+    depends_on: [redis-healthcheck]
+    build:
+      context: ..
+      dockerfile: ./docker/web-app-healthcheck/Dockerfile
+      args:
+        REDIS_HOST: redis-healthcheck
+    ports: ["8080:8080"]
+    volumes: ["web-app-healthcheck-data:/home/app"]
+    networks:
+      - backing-services
+      - public
+    restart: unless-stopped
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: vip
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        window: 15s
+
+volumes:
+  redis-healthcheck-data:
+  web-app-healthcheck-data:
+
+networks:
+  backing-services:
+  public:

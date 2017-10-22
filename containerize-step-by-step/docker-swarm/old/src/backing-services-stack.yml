@@ -1,0 +1,35 @@
+version: "3.3"
+
+services:
+
+  redis:
+    image: healthcheck/redis:alpine
+    ports: ["6379:6379"]
+    networks: [backing-services]
+    volumes: ["redis-data:/data"]
+    restart: unless-stopped
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        window: 15s
+      placement:
+        constraints: [node.role == manager]
+
+  visualizer:
+    image: dockersamples/visualizer:stable
+    ports: ["8082:8080"]
+    stop_grace_period: 1m30s
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+    restart: unless-stopped
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+volumes:
+  redis-data:
+
+networks:
+  backing-services:
+  public:
