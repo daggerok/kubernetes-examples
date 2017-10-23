@@ -1,14 +1,15 @@
 apiVersion: "v1"
 kind: Pod
 metadata:
-  name: redis-healthcheck
+  name: redis
   labels:
-    name: redis-healthcheck
+    name: redis
     app: containerize-step-by-step
 spec:
   containers:
-    - name: redis-healthcheck
+    - name: redis
       image: healthcheck/redis:alpine
       ports:
         - containerPort: 6379
           protocol: TCP
+          name: redis

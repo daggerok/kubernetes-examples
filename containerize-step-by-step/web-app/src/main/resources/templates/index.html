@@ -6,5 +6,9 @@
 </head>
 <body>
   <p>This page was visited {{#counter}}{{total}}{{/counter}} times.</p>
+  <div>
+    <p>host: {{#host}}{{.}}{{/host}}</p>
+    <p>addr: {{#addr}}{{.}}{{/addr}}</p>
+  </div>
 </body>
 </html>

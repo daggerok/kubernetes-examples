@@ -1,0 +1,23 @@
+apiVersion: "v1"
+kind: ReplicationController
+metadata:
+  name: web-app
+  labels:
+    name: web-app
+    app: containerize-step-by-step
+spec:
+  replicas: 2 # multiple replicas
+  template:
+    metadata:
+      labels:
+        name: web-app
+    # same spec as in the pod definition
+    spec:
+      containers:
+        - name: web-app
+          image: localhost:5000/web-app-healthcheck:latest
+#          image: localhost:5000/web-app-healthcheck:1
+          ports:
+            - containerPort: 8080
+              name: web-app
+              protocol: TCP

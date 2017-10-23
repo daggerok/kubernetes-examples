@@ -1,0 +1,34 @@
+= containerize-step-by-step
+
+[script,bash]
+----
+bash gradlew clean assemble
+
+minikube start --cpus 2 --memory 4096
+eval $(minikube docker-env)
+kubectl create -f https://gist.githubusercontent.com/coco98/b750b3debc6d517308596c248daf3bb1/raw/6efc11eb8c2dce167ba0a5e557833cc4ff38fa7c/kube-registry.yaml
+export REGISTRY_POD=$(kubectl get pod -n kube-system | grep kube-registry-v0 | awk '{print $1;}')
+kubectl port-forward --namespace kube-system $REGISTRY_POD 5000:5000
+
+kubectl apply -f ./k8s/redis-healthcheck-pod.yml
+kubectl apply -f ./k8s/redis-healthcheck-svc.yml
+
+docker build --build-arg REDIS_HOST=redis -f ./docker/web-app-healthcheck/Dockerfile -t localhost:5000/web-app-healthcheck .
+docker push localhost:5000/web-app-healthcheck
+kubectl apply -f ./k8s/old/web-app-healthcheck-pod.yml
+kubectl apply -f ./k8s/old/web-app-healthcheck-svc.yml
+kubectl apply -f ./k8s/old/web-app-healthcheck-rc.yml
+
+docker build --build-arg REDIS_HOST=redis -f ./docker/redis-commander-healthcheck/Dockerfile -t localhost:5000/redis-commander-healthcheck .
+docker push localhost:5000/redis-commander-healthcheck
+kubectl apply -f ./k8s/old/redis-commander-healthcheck-pod.yml
+kubectl apply -f ./k8s/old/redis-commander-healthcheck-svc.yml
+
+minikube service web-app
+minikube service commander
+----
+
+links:
+
+. link:https://blog.hasura.io/sharing-a-local-registry-for-minikube-37c7240d0615[minikube and local registry]
+. link:https://www.youtube.com/watch?v=zeS6OyDoy78[Kubernetes Webinar Series - Kubernetes Architecture 101]

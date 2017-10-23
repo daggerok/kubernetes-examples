@@ -1,16 +1,17 @@
 apiVersion: "v1"
 kind: Service
 metadata:
-  name: web-app-healthcheck
+  name: web-app
   labels:
-    name: web-app-healthcheck
+    name: web-app
     app: containerize-step-by-step
 spec:
   ports:
     - port: 8080
-      name: web-app-healthcheck
       targetPort: 8080
+      name: web-app-http
+  type: NodePort # expose port `minikube service web-app --url`
   # selector pointing to web-app-healthcheck-pod.yml metadata.labels
   selector:
-    name: web-app-healthcheck
+    name: web-app
     app: containerize-step-by-step

@@ -73,6 +73,13 @@ kubectl create -f ./k8s/redis-commander-healthcheck.yml
 #open $(minikube service commander --url)
 #or
 minikube service commander
+
+kubectl scale rc web-app --replicas=1
+kubectl scale rc web-app --replicas=3
+
+export WEBAPP_POD=(kubectl get pod -n default | grep web-app | awk '{print $1;}')
+kubectl port-forward --namespace default $WEBAPP_POD 8080
+open http://localhost:8080
 ----
 
 links:
