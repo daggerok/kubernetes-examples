@@ -1,0 +1,37 @@
+apiVersion: "extensions/v1beta1"
+kind: Deployment
+metadata:
+  name: kong-dashboard-rc
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: kong-dashboard-rc
+        app: dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: pgbi/kong-dashboard:v2
+          ports:
+            - name: dashboard
+              containerPort: 8080
+              protocol: TCP
+
+---
+
+apiVersion: "v1"
+kind: Service
+metadata:
+  name: dashboard
+spec:
+  type: LoadBalancer
+  loadBalancerSourceRanges:
+    - 0.0.0.0/0
+  ports:
+    - name: dashboard-port
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: dashboard

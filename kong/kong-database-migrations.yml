@@ -1,0 +1,19 @@
+# deployment it's combination: pod + replica-set
+apiVersion: "v1"
+kind: Pod
+metadata:
+  name: migrations
+spec:
+  containers:
+    - name: migrations
+      image: kong:0.11.0
+      command: ["kong"]
+      args: ["migrations", "-v", "up"]
+      env:
+        - name: KONG_DATABASE
+          value: postgres
+        - name: KONG_PG_HOST
+          value: kong-database
+        - name: KONG_PG_DATABASE
+          value: kong
+  restartPolicy: OnFailure

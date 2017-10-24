@@ -1,0 +1,48 @@
+# database definition
+apiVersion: "v1"
+kind: ReplicationController
+metadata:
+  name: kong-database
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kong-database
+    spec:
+      containers:
+        - name: kong-database
+          image: postgres:9.4-alpine
+          env:
+            - name: POSTGRES_USER
+              value: kong
+            - name: POSTGRES_DB
+              value: kong
+            - name: KONG_CASSANDRA_CONTACT_POINTS
+              value: kong-database
+            - name: PGDATA
+              value: /var/lib/postgresql/data
+          ports:
+            # expose port internaly to cluster
+            - containerPort: 5432
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: kong-database-data
+      volumes:
+        - name: kong-database-data
+          emptyDir: {}
+
+---
+
+apiVersion: "v1"
+kind: Service
+metadata:
+  name: kong-database
+spec:
+  ports:
+    - name: db-port
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: kong-database

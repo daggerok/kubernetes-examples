@@ -2,4 +2,33 @@
 
 migrate kon link:../../../../docker-examples/tree/master/kong-docker-swarm-using-ucp[from docker-swarm] to kubernetes
 
-TODO: in progress...
+[source,bash]
+----
+minikube start
+eval (minikube docker-env)
+
+kubectl apply -f kong-database.yml
+kubectl get pods -w -o wide
+
+kubectl apply -f kong-database-migrations.yml
+kubectl logs migrations
+
+kubectl apply -f kong.yml -f dashboard.yml
+kubectl get pods -w -o wide
+
+minikube service dashboard
+----
+
+enter url: http://kong-admin:8001
+
+.or
+----
+kubectl get pods -o wide
+NAME                                 READY     STATUS    RESTARTS   AGE       IP           NODE
+kong-dashboard-rc-1857119270-39k14   1/1       Running   0          17m       172.17.0.6   minikube
+
+kubectl port-forward --namespace default kong-dashboard-rc-1857119270-39k14 8080
+Forwarding from 127.0.0.1:8080 -> 8080
+
+open http://localhost:8080/
+----

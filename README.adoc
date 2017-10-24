@@ -5,3 +5,4 @@ This project contains some kubernetes examples
 . link:minikube/[Kubernetes using Minikube]
 . link:kubeadm-dind-cluster/[Kubernetes using Docker in Docker]
 . link:containerize-step-by-step/[step-by-step containerize web-app]
+. link:kong/[run kong on kubernetes]

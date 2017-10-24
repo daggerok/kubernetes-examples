@@ -1,0 +1,76 @@
+# deployment it's combination: pod + replica-set
+apiVersion: "extensions/v1beta1"
+kind: Deployment
+metadata:
+  name: kong-rc
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: kong-rc
+        app: kong
+    spec:
+      containers:
+        - name: kong
+          image: kong:0.11.0
+          env:
+            - name: KONG_DATABASE
+              value: postgres
+            - name: KONG_PG_HOST
+              value: kong-database
+            - name: KONG_PG_DATABASE
+              value: kong
+          ports:
+            - name: proxy
+              containerPort: 8000
+              protocol: TCP
+            - name: admin
+              containerPort: 8001
+              protocol: TCP
+            - name: proxy-ssl
+              containerPort: 8443
+              protocol: TCP
+            - name: admin-ssl
+              containerPort: 8444
+              protocol: TCP
+
+---
+
+apiVersion: "v1"
+kind: Service
+metadata:
+  name: kong-proxy
+spec:
+  type: NodePort
+  ports:
+    - name: proxy-port
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: proxy-ssl-port
+      port: 8443
+      targetPort: 8443
+      protocol: TCP
+  selector:
+    app: kong
+
+---
+
+apiVersion: "v1"
+kind: Service
+metadata:
+  name: kong-admin
+spec:
+  type: NodePort
+  ports:
+    - name: admin-port
+      port: 8001
+      targetPort: 8001
+      protocol: TCP
+    - name: admin-ssl-port
+      port: 8444
+      targetPort: 8444
+      protocol: TCP
+  selector:
+    app: kong
