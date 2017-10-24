@@ -1,0 +1,5 @@
+= kong
+
+migrate kon link:../../../../docker-examples/tree/master/kong-docker-swarm-using-ucp[from docker-swarm] to kubernetes
+
+TODO: in progress...
