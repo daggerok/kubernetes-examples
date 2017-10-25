@@ -1,0 +1,40 @@
+= color picker (from env) | kubernetes
+
+.bootstrap kubernetes cluster
+[source,fish]
+----
+# fish shell
+minikube stop; minikube delete; minikube start
+----
+
+.deploy local registry
+[source,fish]
+----
+# fish shell
+
+eval (minikube docker-env)
+kubectl apply -f kube-registry-rc-svc-ds.yml
+export REGISTRY_POD=(kubectl get pod -n kube-system | grep kube-registry-v0 | awk '{print $1;}')
+kubectl port-forward --namespace kube-system $REGISTRY_POD 5000:5000
+----
+
+.build app and push to local registry
+[source,fish]
+----
+# fish shell
+
+bash app/gradlew -b app/build.gradle clean build
+eval (minikube docker-env)
+docker build -t 127.0.0.1:5000/app . --pull --force-rm --no-cache
+docker push 127.0.0.1:5000/app
+----
+
+.deploy to kubernetes
+[source,fish]
+----
+# fish shell
+
+kubectl apply -f app-pod-rc-svc.yml
+kubectl port-forward --namespace default color-app 8001:8080
+http :8001
+----

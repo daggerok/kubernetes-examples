@@ -1,0 +1,28 @@
+plugins {
+  id "java"
+  id "idea"
+  id "eclipse"
+  id "org.springframework.boot" version "1.5.8.RELEASE"
+}
+
+group = "daggerok"
+version = "0.0.1"
+sourceCompatibility = targetCompatibility = 1.8
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compile("org.springframework.boot:spring-boot-starter-actuator")
+  compile("org.springframework.boot:spring-boot-starter-web")
+  compileOnly("org.projectlombok:lombok")
+}
+
+springBoot {
+  executable = true
+}
+
+task wrapper(type: Wrapper) {
+  distributionType = "ALL"
+}
