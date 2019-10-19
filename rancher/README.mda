@@ -1,0 +1,1 @@
+docker run --rm -it --name rancher -p 80:80 -p 443:443 rancher/rancher
