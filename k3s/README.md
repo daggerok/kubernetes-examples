@@ -1,6 +1,7 @@
 # k3s
 
 ## Table of Content
+* [very quick start](#very-quick-start)
 * [quick start](#quick-start)
   * [multipass installation](#multipass-installation)
   * [multipass visualization](#multipass-visualization)
