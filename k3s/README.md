@@ -8,6 +8,13 @@
   * [verify](#verify)
   * [resources](#resources)
 
+## very quick start
+
+```bash
+brew cask reinstall multipass
+curl https://raw.githubusercontent.com/superseb/multipass-k3s/master/multipass-k3s.sh | bash
+```
+
 ## quick start
 
 ### multipass installation
