@@ -2,28 +2,29 @@
 
 ## Table of Content
 
-* [k3d](#k3d)
-  * [create cluster with 3 workers](#create-cluster-with-3-workers)
+* [k3d k3s k8s](#k3d-k3s-k8s)
+  * [create cluster with 2 workers](#create-cluster-with-2-workers)
   * [switch kubectl context to created k3s cluster](#switch-kubectl-context-to-created-k3s-cluster)
   * [do needed stuff](#apply-k8s-metadata-resources)
   * [cleanup](#stop-and-destroy)
-* [multipass](#multipass)
-  * [prepare](#prepare)
-  * [manual k3s cluster](#manual-k3s-cluster)
-  * [verify](#verify)
+* [multipass k3s k8s](#multipass-k3s-k8s)
+  * [prepare master and 2 workers VMs](#prepare-master-and-2-workers-vms)
+  * [create k3s cluster](#create-k3s-cluster)
+  * [do needed stuff](#verify)
+  * [cleanup](#cleanup)
   * [resources](#resources)
 
-## k3d
+## k3d k3s k8s
 
 ```bash
 brew reinstall k3d
 ```
 
-### create k3s cluster with 3 workers
+### create k3s cluster with 2 workers
 
 ```bash
 brew reinstall k3d
-k3d create --api-port 6551 --publish 80:80 --workers 3
+k3d create --api-port 6551 --publish 80:80 --workers 2
 # sleep 5s
 ```
 
@@ -48,13 +49,13 @@ k3d stop
 k3d delete
 ```
 
-## multipass
+## multipass k3s k8s
 
 ```bash
 brew cask reinstall multipass
 ```
 
-### prepare
+### prepare master and 2 workers VMs
 
 ```bash
 # multipass launch --name k3s-master --cpus 1 --mem 512M --disk 3G
@@ -66,7 +67,7 @@ done
 # ... Send usage data (yes/no/Later)? n
 ```
 
-### manual k3s cluster
+### create k3s cluster
 
 ```bash
 # Deploy k3s on the master node
@@ -95,7 +96,13 @@ multipass list
 # k3s-master   Running  192.168.64.2  Ubuntu 18.04 LTS
 
 multipass exec k3s-master kubectl get nodes
+```
 
+### cleanup
+
+```bash
+multipass stop k3s-master k3s-worker1 k3s-worker2
+multipass purge
 ```
 
 ### resources
