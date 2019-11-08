@@ -3,6 +3,10 @@
 ## Table of Content
 
 * [k3d](#k3d)
+  * [create cluster with 3 workers](#create-cluster-with-3-workers)
+  * [switch kubectl context to created k3s cluster](#switch-kubectl-context-to-created-k3s-cluster)
+  * [do needed stuff](#apply-k8s-metadata-resources)
+  * [cleanup](#stop-and-destroy)
 * [multipass](#multipass)
   * [prepare](#prepare)
   * [manual k3s cluster](#manual-k3s-cluster)
@@ -13,13 +17,33 @@
 
 ```bash
 brew reinstall k3d
+```
+
+### create k3s cluster with 3 workers
+
+```bash
+brew reinstall k3d
 k3d create --api-port 6551 --publish 80:80 --workers 3
 # sleep 5s
+```
+
+### switch kubectl context to created k3s cluster
+
+```bash
 export KUBECONFIG="$(k3d get-kubeconfig --name='k3s-default')"
+```
+
+### apply k8s metadata resources
+
+```bash
 kubectl apply -f ./path/to/k8s/
-# sleep ...
-kubectl get all
-# ...
+# kubectl get all
+# do needed stuff...
+```
+
+### stop and destroy
+
+```bash
 k3d stop
 k3d delete
 ```
