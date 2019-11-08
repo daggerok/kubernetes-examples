@@ -3,7 +3,7 @@
 ## Table of Content
 
 * [k3d k3s k8s](#k3d-k3s-k8s)
-  * [create cluster with 2 workers](#create-cluster-with-2-workers)
+  * [create k3s cluster](#create-k3s-cluster-with-2-workers)
   * [switch kubectl context to created k3s cluster](#switch-kubectl-context-to-created-k3s-cluster)
   * [do needed stuff](#apply-k8s-metadata-resources)
   * [cleanup](#stop-and-destroy)
