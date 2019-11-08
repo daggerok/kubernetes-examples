@@ -1,31 +1,36 @@
 # k3s
 
 ## Table of Content
-* [very quick start](#very-quick-start)
-* [quick start](#quick-start)
-  * [multipass installation](#multipass-installation)
-  * [multipass visualization](#multipass-visualization)
-  * [k3s clustering](#k3s-clustering)
+
+* [k3d](#k3d)
+* [multipass](#multipass)
+  * [prepare](#prepare)
+  * [manual k3s cluster](#manual-k3s-cluster)
   * [verify](#verify)
   * [resources](#resources)
 
-## very quick start
+## k3d
+
+```bash
+brew reinstall k3d
+k3d create --api-port 6551 --publish 80:80 --workers 3
+# sleep 5s
+export KUBECONFIG="$(k3d get-kubeconfig --name='k3s-default')"
+kubectl apply -f ./path/to/k8s/
+# sleep ...
+kubectl get all
+# ...
+k3d stop
+k3d delete
+```
+
+## multipass
 
 ```bash
 brew cask reinstall multipass
-# curl https://raw.githubusercontent.com/superseb/multipass-k3s/master/multipass-k3s.sh | bash
-curl https://raw.githubusercontent.com/daggerok/kubernetes-examples/master/k3s/multipass-k3s.sh | bash
 ```
 
-## quick start
-
-### multipass installation
-
-```bash
-brew cask reinstall multipass
-```
-
-### multipass visualization
+### prepare
 
 ```bash
 # multipass launch --name k3s-master --cpus 1 --mem 512M --disk 3G
@@ -37,7 +42,7 @@ done
 # ... Send usage data (yes/no/Later)? n
 ```
 
-### k3s clustering
+### manual k3s cluster
 
 ```bash
 # Deploy k3s on the master node
