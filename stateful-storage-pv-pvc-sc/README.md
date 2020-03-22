@@ -3,7 +3,29 @@ Play with persistent volume, persistent-volume claim and storage class
 
 ## prerequisites
 
-enable docker for mac and k8s
+enable docker for mac and k8s (use for example minishift)
+
+```bash
+brew reinstall cask minishift
+sudo minishift setup
+minishift start
+
+minishift oc-env
+eval $(minishift oc-env)
+
+oc login -u system:admin
+```
+
+open https://192.168.64.19:8443/console
+login with:
+* username: `developer`
+* password: `123`
+
+## cleanup
+
+```bash
+minishift stop ; minishift delete -f
+```
 
 ## resources
 
